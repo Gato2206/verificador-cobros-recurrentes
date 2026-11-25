@@ -1,0 +1,6 @@
+referencia,cuenta_esperada,factor,tipo,descripcion_poliza
+SEGPFF40118,Tarjeta Oro,4.00,SEGURO,Seguro de saldo - Tarjeta Oro
+SEGCD550294,Tarjeta Retail,6.00,SEGURO,Seguro de saldo - Tarjeta Retail
+SEGCD661847,Tarjeta Plus,6.00,SEGURO,Seguro de saldo - Tarjeta Plus
+BLNL220931,Tarjeta Plus,2.50,SEGURO,Seguro de banca en linea (fraude)
+COMISION SALDO MINIMO,Cuenta Debito,,COMISION,Comision por saldo minimo
