@@ -138,10 +138,15 @@ python excel/construir_plantilla.py   # genera excel/verificador_cobros.xlsx
 
 Incluye las fórmulas de verificación, lista desplegable alimentada del catálogo, formato condicional y el tablero de control. Las fórmulas se almacenan en inglés —así es como el formato `.xlsx` las guarda internamente— y Excel las traduce al idioma de la instalación al abrir el archivo.
 
-Dos notas para quien la use:
+### Tres detalles de compatibilidad
 
-- La fórmula de detección de referencia es matricial. En Excel 2016 o anterior hay que confirmarla con `Ctrl + Shift + Enter`.
-- La columna de ciclo se construye con `YEAR` y `MONTH` en lugar de un código de formato de fecha. El código `aaaa` significa *año* en la documentación en español pero Excel lo interpreta como *día de la semana*, y la ambigüedad produce ciclos corruptos de forma silenciosa.
+Generar fórmulas desde `openpyxl` tiene trampas que no fallan de forma visible, sino que producen resultados vacíos o erróneos sin avisar. Las tres que aparecieron aquí:
+
+**La detección de referencia usa `SUMPRODUCT`, no `MATCH(1,...)`.** La segunda forma exige evaluación matricial. `openpyxl` escribe las fórmulas como texto plano, sin la marca que identifica una fórmula matricial, así que Excel al abrir el archivo inserta el operador de intersección implícita `@` para preservar el comportamiento antiguo. Ese `@` colapsa el rango a un solo valor y la búsqueda deja de funcionar en silencio: toda la columna devuelve `NO RECONOCIDA` sin reportar un error. `SUMPRODUCT` declara sus argumentos como matrices, evalúa el rango completo y sobrevive al guardado.
+
+**Las funciones posteriores a Excel 2007 llevan el prefijo `_xlfn.`** dentro del archivo. `MINIFS` y `MAXIFS` escritas sin él producen `#¿NOMBRE?`. Excel retira el prefijo al mostrarlas, así que en la barra de fórmulas se leen normales. Por eso el diagnóstico usa `IF` anidados en lugar de `IFS`: `IF` es anterior a esa frontera y no necesita prefijo.
+
+**La columna de ciclo se construye con `YEAR` y `MONTH`,** no con un código de formato de fecha. El código `aaaa` significa *año* en la documentación en español, pero Excel lo interpreta como *día de la semana*, y la ambigüedad produce ciclos corruptos sin error visible.
 
 ## Estructura
 
