@@ -128,9 +128,21 @@ def _escribir_formulas(hoja, fila: int) -> None:
     hoja[f"C{fila}"] = f'=IFERROR(INDEX({cuentas},MATCH($D{fila},{ref},0)),"—")'
 
     # Referencia: búsqueda por subcadena, no extracción de la última palabra.
+    #
+    # Se usa SUMPRODUCT y no MATCH(1,...) porque esa segunda forma exige
+    # evaluación matricial. openpyxl escribe las fórmulas como texto plano,
+    # sin la marca que identifica una fórmula matricial, así que Excel al
+    # abrir el archivo le inserta el operador de intersección implícita (@)
+    # para preservar el comportamiento antiguo. Ese @ colapsa el rango a un
+    # único valor y la búsqueda deja de funcionar en silencio.
+    #
+    # SUMPRODUCT declara sus argumentos como matrices, evalúa el rango
+    # completo sin necesidad de Ctrl+Shift+Enter y sobrevive al guardado.
+    primera = ref.split(":")[0]
     hoja[f"D{fila}"] = (
-        f'=IFERROR(INDEX({ref},MATCH(1,ISNUMBER(SEARCH({ref},$F{fila}))'
-        f'*({ref}<>""),0)),"NO RECONOCIDA")'
+        f'=IFERROR(INDEX({ref},'
+        f'SUMPRODUCT(ISNUMBER(SEARCH({ref},$F{fila}))*({ref}<>"")*ROW({ref}))'
+        f'-ROW({primera})+1),"NO RECONOCIDA")'
     )
 
     # Verificación: compara lo que el banco hizo contra lo contratado.
@@ -160,10 +172,14 @@ def _escribir_formulas(hoja, fila: int) -> None:
     )
     hoja[f"J{fila}"].number_format = "0.##"
 
+    # Diagnóstico con IF anidados y no con IFS: las funciones posteriores a
+    # Excel 2007 deben escribirse con el prefijo _xlfn. dentro del archivo, y
+    # openpyxl no lo agrega. Sin ese prefijo Excel muestra #¿NOMBRE?. IF es
+    # anterior a esa frontera y funciona en cualquier versión sin prefijo.
     hoja[f"K{fila}"] = (
-        f'=IFS($D{fila}="NO RECONOCIDA","NO CONTRATADO",'
-        f'$I{fila}>1,"DUPLICADO: "&$I{fila}&" cobros",'
-        f'$E{fila}="✘","CUENTA INCORRECTA",TRUE,"OK")'
+        f'=IF($D{fila}="NO RECONOCIDA","NO CONTRATADO",'
+        f'IF($I{fila}>1,"DUPLICADO: "&$I{fila}&" cobros",'
+        f'IF($E{fila}="✘","CUENTA INCORRECTA","OK")))'
     )
 
 
@@ -187,7 +203,7 @@ def _formato_condicional(hoja, filas: int) -> None:
     for simbolo, relleno in (("✔", VERDE), ("✘", ROJO), ("⚠", AMARILLO)):
         hoja.conditional_formatting.add(
             f"E{FILA_INICIAL}:E{fin}",
-            FormulaRule(formula=[f'EXACT($E{FILA_INICIAL},"{simbolo}")'], fill=relleno),
+            CellIsRule(operator="equal", formula=[f'"{simbolo}"'], fill=relleno),
         )
 
     hoja.conditional_formatting.add(
@@ -236,15 +252,20 @@ def _tablero(hoja) -> None:
             f'=SUMIFS($G${FILA_INICIAL}:$G${ULTIMA_FILA},{rango_ciclo},$N$3)',
             "—",
         ),
+        # MINIFS y MAXIFS son posteriores a Excel 2007 y requieren el prefijo
+        # _xlfn. dentro del archivo. Excel lo retira al mostrarlas: en la barra
+        # de fórmulas se leen como MINIFS y MAXIFS normales.
         (
             "Tarifa mínima",
-            f'=MINIFS($J${FILA_INICIAL}:$J${ULTIMA_FILA},{rango_ciclo},$N$3)',
-            "= máxima",
+            f'=_xlfn.MINIFS($J${FILA_INICIAL}:$J${ULTIMA_FILA},{rango_ciclo},$N$3)',
+            # Sin "=" al inicio: un texto que empieza con "=" lo interpreta
+            # Excel como fórmula y devuelve #¿NOMBRE?.
+            "igual a la máxima",
         ),
         (
             "Tarifa máxima",
-            f'=MAXIFS($J${FILA_INICIAL}:$J${ULTIMA_FILA},{rango_ciclo},$N$3)',
-            "= mínima",
+            f'=_xlfn.MAXIFS($J${FILA_INICIAL}:$J${ULTIMA_FILA},{rango_ciclo},$N$3)',
+            "igual a la mínima",
         ),
         (
             "Alertas abiertas",
